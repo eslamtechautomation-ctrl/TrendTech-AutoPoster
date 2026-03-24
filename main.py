@@ -17,9 +17,9 @@ DB_FILE = "posted_links.json"
 
 # قائمة المصادر الخاصة بك
 FEEDS = [
-    {"name": "Family TV", "url": "https://familytvr.blogspot.com/feeds/posts/default?alt=rss"},
-    {"name": "Luxury Estate", "url": "https://luxuryestateguide.blogspot.com/feeds/posts/default?alt=rss"},
-    {"name": "Tech News", "url": "https://techcrunch.com/feed/"}
+    {"name": "Family TV", "url": "https://familytvr.blogspot.com/feeds/posts/default?alt=rss"}
+   
+   
 ]
 
 def load_posted_links():

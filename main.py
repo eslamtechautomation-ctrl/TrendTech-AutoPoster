@@ -10,8 +10,8 @@ FB_PAGE_ID = os.environ.get("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
 
 # تعريف الموديل الصحيح لـ Groq
-GROQ_MODEL = "llama-3.3-70b-specdec" 
 
+GROQ_MODEL = "llama-3.3-70b-versatile"
 client = Groq(api_key=GROQ_API_KEY)
 DB_FILE = "posted_links.json"
 

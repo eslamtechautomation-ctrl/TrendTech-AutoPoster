@@ -61,6 +61,7 @@ def ai_rephrase(news_data):
     return completion.choices[0].message.content
 
 def post_to_fb(content):
+    print(f"Posting to Page ID: {FB_PAGE_ID}")
     url = f"https://graph.facebook.com/v20.0/{FB_PAGE_ID}/feed"
     payload = {'message': content, 'access_token': FB_PAGE_ACCESS_TOKEN}
     return requests.post(url, data=payload).json()

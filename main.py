@@ -1,37 +1,61 @@
 import os
-from groq import Groq
+import feedparser
 import requests
+from groq import Groq
 
-# 1. إعداد Groq
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+# إعدادات الـ APIs من الـ Secrets
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+FB_PAGE_ID = os.environ.get("FB_PAGE_ID")
+FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
 
-def generate_post(topic):
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {
-                "role": "user",
-                "content": f"Write a viral Facebook post about {topic} in English. Keep it short, include emojis and tech hashtags.",
-            }
-        ],
-        model="llama3-8b-8192", # موديل سريع وممتاز للبوستات
+client = Groq(api_key=GROQ_API_KEY)
+
+def get_latest_tech_news():
+    # رابط RSS لموقع TechCrunch (تقدر تضيف غيره)
+    feed_url = "https://techcrunch.com/feed/"
+    feed = feedparser.parse(feed_url)
+    
+    if feed.entries:
+        latest_entry = feed.entries[0]
+        return {
+            "title": latest_entry.title,
+            "link": latest_entry.link,
+            "summary": latest_entry.summary
+        }
+    return None
+
+def ai_rephrase_news(news_data):
+    prompt = f"""
+    You are the admin of 'Trend Tech' Facebook page. 
+    Rephrase this tech news into a viral, engaging Facebook post in English.
+    News Title: {news_data['title']}
+    News Link: {news_data['link']}
+    
+    Requirements:
+    - Use catchy hooks.
+    - Use tech emojis.
+    - Include hashtags like #TrendTech #AI #TechNews.
+    - Keep it concise and professional yet exciting.
+    """
+    
+    completion = client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        model="llama3-8b-8192",
     )
-    return chat_completion.choices[0].message.content
+    return completion.choices[0].message.content
 
-# 2. وظيفة النشر على فيسبوك
-def post_to_facebook(message):
-    page_id = os.environ.get("FB_PAGE_ID")
-    access_token = os.environ.get("FB_PAGE_ACCESS_TOKEN")
-    url = f"https://graph.facebook.com/v20.0/{page_id}/feed"
-    payload = {'message': message, 'access_token': access_token}
-    response = requests.post(url, data=payload)
-    return response.json()
+def post_to_fb(content):
+    url = f"https://graph.facebook.com/v20.0/{FB_PAGE_ID}/feed"
+    payload = {'message': content, 'access_token': FB_PAGE_ACCESS_TOKEN}
+    r = requests.post(url, data=payload)
+    return r.json()
 
-# تجربة التشغيل
-test_topic = "Artificial Intelligence in 2026"
-print("Generating post via Groq...")
-ai_message = generate_post(test_topic)
-print(f"Post Content: {ai_message}")
-
-print("Posting to Facebook...")
-result = post_to_facebook(ai_message)
-print(f"Result: {result}")
+# تشغيل الدورة كاملة
+print("Checking for news...")
+news = get_latest_tech_news()
+if news:
+    print(f"Found news: {news['title']}")
+    refined_post = ai_rephrase_news(news)
+    print("Posting to Facebook...")
+    result = post_to_fb(refined_post)
+    print(f"Facebook Result: {result}")

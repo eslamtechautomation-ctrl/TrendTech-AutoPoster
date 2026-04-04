@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # مهم جداً عشان يقدر يحدّث ملف الـ JSON
+      contents: write 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -20,13 +20,19 @@ jobs:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: pip install requests feedparser groq
+        # تمت إضافة atproto هنا لحل مشكلة ModuleNotFoundError
+        run: pip install requests feedparser groq atproto 
 
       - name: Run Auto Poster
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+          # إضافة بيانات حسابات باسكاي الثلاثة
+          BS_USER_1: ${{ secrets.BS_USER_1 }}
+          BS_PASS_1: ${{ secrets.BS_PASS_1 }}
+          BS_USER_2: ${{ secrets.BS_USER_2 }}
+          BS_PASS_2: ${{ secrets.BS_PASS_2 }}
+          BS_USER_3: ${{ secrets.BS_USER_3 }}
+          BS_PASS_3: ${{ secrets.BS_PASS_3 }}
         run: python main.py
 
       - name: Commit and Push changes

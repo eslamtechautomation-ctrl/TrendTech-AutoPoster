@@ -2,4 +2,3 @@ requests
 feedparser
 groq
 atproto
-atproto

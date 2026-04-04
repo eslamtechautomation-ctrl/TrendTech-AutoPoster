@@ -3,31 +3,28 @@ import json
 import feedparser
 import requests
 from groq import Groq
+from datetime import datetime, timezone
+import time
 
 # إعدادات الـ APIs
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 FB_PAGE_ID = os.environ.get("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
-
-# الموديل المستقر
-GROQ_MODEL = "llama-3.3-70b-versatile" 
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
 client = Groq(api_key=GROQ_API_KEY)
 DB_FILE = "posted_links.json"
 
-# قائمة المصادر الخاصة بك
 FEEDS = [
-    {"name": "Family TV", "url": "https://familytvr.blogspot.com/feeds/posts/default?alt=rss"}
-   
-   
+    {"name": "Family TV", "url": "https://familytvr.blogspot.com/feeds/posts/default?alt=rss", "type": "blog"},
+    {"name": "Quickcomicx Dailymotion", "url": "https://www.dailymotion.com/rss/user/Quickcomicx/1", "type": "video"}
 ]
 
 def load_posted_links():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r") as f:
-                content = f.read()
-                return json.loads(content) if content else []
+                return json.load(f)
         except: return []
     return []
 
@@ -35,55 +32,56 @@ def save_posted_link(link):
     links = load_posted_links()
     links.append(link)
     with open(DB_FILE, "w") as f:
-        json.dump(links[-100:], f)
+        json.dump(links[-200:], f)
 
-def get_new_news():
+def get_content_to_post():
     posted_links = load_posted_links()
+    
     for feed in FEEDS:
-        print(f"Checking: {feed['name']}")
-        parsed_feed = feedparser.parse(feed['url'])
-        for entry in parsed_feed.entries:
-            if entry.link not in posted_links:
-                return {"title": entry.title, "link": entry.link, "source": feed['name']}
+        print(f"Checking {feed['name']}...")
+        parsed = feedparser.parse(feed['url'])
+        
+        if not parsed.entries:
+            continue
+
+        for entry in parsed.entries:
+            # استخراج وقت النشر من الريس (RSS)
+            # معظم الروابط تستخدم published_parsed أو updated_parsed
+            published_time = entry.get('published_parsed') or entry.get('updated_parsed')
+            
+            if published_time:
+                # تحويل وقت المنشور إلى توقيت جهازك للمقارنة
+                post_date = datetime.fromtimestamp(time.mktime(published_time), tz=timezone.utc)
+                now = datetime.now(timezone.utc)
+                diff = now - post_date
+                
+                # إذا كان الرابط لم ينشر من قبل
+                if entry.link not in posted_links:
+                    print(f"Found new content: {entry.title}")
+                    return {"title": entry.title, "link": entry.link, "type": feed['type'], "source": feed['name']}
+                
     return None
 
-def ai_rephrase(news_data):
-    # برومبت ذكي يغير طريقة الكتابة حسب المصدر
-    prompt = f"""
-    You are the admin of 'Trend Tech' Facebook page. 
-    Write a viral and engaging Facebook post in English for this news.
-    Source: {news_data['source']}
-    Title: {news_data['title']}
-    Link: {news_data['link']}
-    
-    Guidelines:
-    - If source is 'Family TV', talk about streaming and apps.
-    - If source is 'Luxury Estate', talk about modern lifestyle and tech in homes.
-    - If source is 'Tech News', talk about global tech trends.
-    - Use emojis, catchy hooks, and hashtags like #TrendTech #Innovation.
-    """
-    
-    completion = client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model=GROQ_MODEL,
-    )
+def ai_rephrase(data):
+    prompt = f"Write a viral Facebook post for Trend Tech. Content: {data['title']}. Link: {data['link']}. Source: {data['source']}. Use emojis."
+    completion = client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model=GROQ_MODEL)
     return completion.choices[0].message.content
 
-def post_to_fb(content):
+def post_to_fb(text):
     url = f"https://graph.facebook.com/v20.0/{FB_PAGE_ID}/feed"
-    payload = {'message': content, 'access_token': FB_PAGE_ACCESS_TOKEN}
-    return requests.post(url, data=payload).json()
+    return requests.post(url, data={'message': text, 'access_token': FB_PAGE_ACCESS_TOKEN}).json()
 
 if __name__ == "__main__":
-    news = get_new_news()
-    if news:
-        print(f"Found new content from {news['source']}: {news['title']}")
-        refined_post = ai_rephrase(news)
-        result = post_to_fb(refined_post)
-        if "id" in result:
-            print("Post success!")
-            save_posted_link(news['link'])
-        else:
-            print(f"FB Error: {result}")
+    content = get_content_to_post()
+    
+    if content:
+        # إذا وجدنا شيء لم ينشر، ننشره فوراً في منشور منفصل
+        print(f"Post detected from {content['source']}")
+        post_text = ai_rephrase(content)
+        res = post_to_fb(post_text)
+        
+        if "id" in res:
+            save_posted_link(content['link'])
+            print("Successfully posted to Facebook.")
     else:
-        print("Everything is up to date.")
+        print("No new content found in the last check.")

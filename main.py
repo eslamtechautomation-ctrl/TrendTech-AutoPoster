@@ -1,27 +1,24 @@
 import os
 import json
 import feedparser
-import requests
 import time
 from groq import Groq
-from datetime import datetime, timezone
 from atproto import Client
 
-# الإعدادات
+# إعدادات الـ APIs (باسكاي وجروق فقط)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-FB_PAGE_ID = os.environ.get("FB_PAGE_ID")
-FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
 client = Groq(api_key=GROQ_API_KEY)
 DB_FILE = "posted_links.json"
 
+# المصادر (المدونة وديلي موشن)
 FEEDS = [
     {"name": "Family TV", "url": "https://familytvr.blogspot.com/feeds/posts/default?alt=rss", "type": "blog"},
     {"name": "Quickcomicx Dailymotion", "url": "https://www.dailymotion.com/rss/user/Quickcomicx/1", "type": "video"}
 ]
 
-# بيانات باسكاي (3 حسابات)
+# بيانات حسابات Bluesky الثلاثة
 BS_ACCOUNTS = [
     {"user": os.environ.get("BS_USER_1"), "pass": os.environ.get("BS_PASS_1")},
     {"user": os.environ.get("BS_USER_2"), "pass": os.environ.get("BS_PASS_2")},
@@ -41,35 +38,38 @@ def post_to_bs(text, user, password):
         bs_client = Client()
         bs_client.login(user, password)
         bs_client.send_post(text)
-        print(f"✅ Success Bluesky: {user}")
-    except Exception as e: print(f"❌ BS Error: {e}")
-
-def post_to_fb(text):
-    url = f"https://graph.facebook.com/v20.0/{FB_PAGE_ID}/feed"
-    return requests.post(url, data={'message': text, 'access_token': FB_PAGE_ACCESS_TOKEN}).json()
+        print(f"✅ تم النشر بنجاح على باسكاي: {user}")
+    except Exception as e:
+        print(f"❌ خطأ في حساب ({user}): {e}")
 
 if __name__ == "__main__":
     posted_links = load_posted()
+    new_content_found = False
     
     for feed in FEEDS:
+        print(f"🔍 فحص مصدر: {feed['name']}")
         parsed = feedparser.parse(feed['url'])
+        
         for entry in parsed.entries:
             if entry.link not in posted_links:
-                # صياغة المنشور
-                prompt = f"Write a viral post for Trend Tech. Title: {entry.title}. Link: {entry.link}. Type: {feed['type']}. Use emojis."
+                print(f"✨ تم العثور على محتوى جديد: {entry.title}")
+                
+                # صياغة المنشور بالذكاء الاصطناعي
+                prompt = f"Write a viral social media post for this {feed['type']}. Title: {entry.title}. Link: {entry.link}. Use emojis and hashtags."
                 ai_res = client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model=GROQ_MODEL)
                 post_text = ai_res.choices[0].message.content
 
-                # النشر على فيسبوك
-                post_to_fb(post_text)
-
-                # النشر على 3 حسابات باسكاي
+                # النشر على حسابات باسكاي الثلاثة فقط
                 for acc in BS_ACCOUNTS:
                     post_to_bs(post_text, acc['user'], acc['pass'])
 
-                # حفظ الرابط
+                # حفظ الرابط لمنع التكرار
                 posted_links.append(entry.link)
-                with open(DB_FILE, "w") as f: json.dump(posted_links[-200:], f)
-                
-                # نشر منشور واحد من كل مصدر في المرة الواحدة
-                break
+                new_content_found = True
+                break # نشر منشور واحد من كل مصدر في المرة الواحدة لضمان التنوع
+
+    if new_content_found:
+        with open(DB_FILE, "w") as f:
+            json.dump(posted_links[-200:], f)
+    else:
+        print("☕ لا يوجد محتوى جديد حالياً.")
